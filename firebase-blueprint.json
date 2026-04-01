@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "Note": {
+      "title": "Revision Note",
+      "description": "A single revision note with content and metadata.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the note." },
+        "content": { "type": "string", "description": "The main content of the note." },
+        "category": { "type": "string", "description": "The subject or category of the note." },
+        "tags": { "type": "array", "items": { "type": "string" }, "description": "A list of tags for the note." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The time the note was created." },
+        "userId": { "type": "string", "description": "The user who created the note." },
+        "relatedNoteIds": { "type": "array", "items": { "type": "string" }, "description": "A list of IDs for related notes." }
+      },
+      "required": ["title", "content", "category", "createdAt", "userId"]
+    },
+    "Summary": {
+      "title": "Note Summary",
+      "description": "An AI-generated summary of a revision note.",
+      "type": "object",
+      "properties": {
+        "noteId": { "type": "string", "description": "The ID of the parent note." },
+        "summaryText": { "type": "string", "description": "The generated summary content." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The time the summary was generated." }
+      },
+      "required": ["noteId", "summaryText", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/notes/{noteId}": {
+      "schema": "Note",
+      "description": "Collection of revision notes."
+    },
+    "/notes/{noteId}/summaries/{summaryId}": {
+      "schema": "Summary",
+      "description": "Summaries associated with a specific note."
+    }
+  }
+}

@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: notes
+    // Document ID: {noteId}
+    // Fields:
+    //   - title: string (required)
+    //   - content: string (required)
+    //   - category: string (required)
+    //   - tags: list of strings (optional)
+    //   - createdAt: string (required, ISO 8601)
+    //   - userId: string (required)
+    //
+    // Collection: summaries
+    // Document ID: {summaryId} (nested under /notes/{noteId}/summaries)
+    // Fields:
+    //   - noteId: string (required)
+    //   - summaryText: string (required)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "magezik92@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isValidNote(data) {
+      return data.keys().hasAll(['title', 'content', 'category', 'createdAt', 'userId']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 100000 &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
+             data.userId == request.auth.uid &&
+             (!('tags' in data) || data.tags is list) &&
+             (!('relatedNoteIds' in data) || data.relatedNoteIds is list);
+    }
+
+    function isValidSummary(data) {
+      return data.keys().hasAll(['noteId', 'summaryText', 'createdAt']) &&
+             data.noteId is string &&
+             data.summaryText is string && data.summaryText.size() > 0 && data.summaryText.size() < 10000;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) && request.resource.data.role == 'student';
+    }
+
+    match /notes/{noteId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidNote(request.resource.data);
+      allow update: if (isDocOwner() || isAdmin()) && isValidNote(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isDocOwner() || isAdmin();
+
+      match /summaries/{summaryId} {
+        allow read: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid;
+        allow create: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid && isValidSummary(request.resource.data);
+        allow update: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid && isValidSummary(request.resource.data);
+        allow delete: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid;
+      }
+    }
+  }
+}
