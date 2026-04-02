@@ -22,6 +22,14 @@ service cloud.firestore {
     //   - summaryText: string (required)
     //   - createdAt: string (required, ISO 8601)
     //
+    // Collection: chat_messages
+    // Document ID: {messageId}
+    // Fields:
+    //   - userId: string (required)
+    //   - role: string (required, 'user' or 'ai')
+    //   - text: string (required)
+    //   - createdAt: string (required, ISO 8601)
+    //
     // ===============================================================
 
     // Helper Functions
@@ -50,7 +58,8 @@ service cloud.firestore {
              data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
              data.userId == request.auth.uid &&
              (!('tags' in data) || data.tags is list) &&
-             (!('relatedNoteIds' in data) || data.relatedNoteIds is list);
+             (!('relatedNoteIds' in data) || data.relatedNoteIds is list) &&
+             (!('mastered' in data) || data.mastered is bool);
     }
 
     function isValidSummary(data) {
@@ -59,9 +68,23 @@ service cloud.firestore {
              data.summaryText is string && data.summaryText.size() > 0 && data.summaryText.size() < 10000;
     }
 
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['userId', 'role', 'text', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.role in ['user', 'ai'] &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 10000 &&
+             (!('files' in data) || data.files is list);
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create, update: if isOwner(userId) && request.resource.data.role == 'student';
+    }
+
+    match /chat_messages/{messageId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidChatMessage(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     match /notes/{noteId} {

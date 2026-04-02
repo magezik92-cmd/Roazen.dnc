@@ -10,7 +10,9 @@ import {
   orderBy, 
   where,
   getDoc,
-  getDocFromServer
+  getDocFromServer,
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 import { 
   signInWithPopup, 
@@ -45,6 +47,10 @@ import {
   X,
   FileText,
   Image as ImageIcon,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Award,
   Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -229,6 +235,213 @@ const TagInput = ({
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const StudyMode = ({ 
+  notes, 
+  onClose, 
+  onToggleMastered 
+}: { 
+  notes: Note[], 
+  onClose: () => void,
+  onToggleMastered: (id: string, mastered: boolean) => void
+}) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isRevealed, setIsRevealed] = useState(false);
+
+  const currentNote = notes[currentIndex];
+  const progress = notes.length > 0 ? ((currentIndex + 1) / notes.length) * 100 : 0;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') nextNote();
+      if (e.key === 'ArrowLeft') prevNote();
+      if (e.key === ' ') {
+        e.preventDefault();
+        setIsRevealed(true);
+      }
+      if (e.key === 'm' || e.key === 'M') {
+        if (currentNote) onToggleMastered(currentNote.id, !currentNote.mastered);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, isRevealed, currentNote]);
+
+  const nextNote = () => {
+    if (currentIndex < notes.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setIsRevealed(false);
+    }
+  };
+
+  const prevNote = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+      setIsRevealed(false);
+    }
+  };
+
+  if (notes.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-neutral-900 z-[60] flex items-center justify-center p-6">
+        <div className="text-center text-white">
+          <BookOpen className="w-16 h-16 mx-auto mb-6 opacity-20" />
+          <h2 className="text-2xl font-bold mb-4 tracking-tight">No notes to study!</h2>
+          <p className="text-neutral-400 mb-8 max-w-xs mx-auto">Add some revision notes first to start your study session.</p>
+          <button 
+            onClick={onClose} 
+            className="px-8 py-4 bg-blue-600 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-neutral-900 z-[60] flex flex-col overflow-hidden">
+      <div className="absolute inset-0 opacity-10 pointer-events-none" 
+           style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+
+      {/* Header */}
+      <div className="p-6 flex justify-between items-center bg-neutral-800/50 border-b border-neutral-700 relative z-10">
+        <div className="flex items-center gap-4">
+          <button onClick={onClose} className="p-2 text-neutral-400 hover:text-white transition-colors">
+            <X className="w-6 h-6" />
+          </button>
+          <div className="h-8 w-px bg-neutral-700" />
+          <div className="flex items-center gap-2 text-white">
+            <Award className="w-5 h-5 text-yellow-500" />
+            <span className="font-bold tracking-tight">Study Mode</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right hidden sm:block">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Session Progress</p>
+            <p className="text-sm font-mono text-white">{currentIndex + 1} / {notes.length}</p>
+          </div>
+          <div className="w-32 h-2 bg-neutral-700 rounded-full overflow-hidden">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              className="h-full bg-blue-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Card Area */}
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 relative z-10">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentNote.id}
+            initial={{ opacity: 0, x: 50, rotateY: 90 }}
+            animate={{ opacity: 1, x: 0, rotateY: 0 }}
+            exit={{ opacity: 0, x: -50, rotateY: -90 }}
+            transition={{ type: "spring", damping: 20, stiffness: 100 }}
+            className="w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col min-h-[450px] max-h-[80vh] border border-white/20"
+          >
+            <div className="p-8 border-b border-neutral-100 bg-neutral-50 flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block mb-1">{currentNote.category}</span>
+                <h3 className="text-2xl font-bold text-neutral-900 tracking-tight">{currentNote.title}</h3>
+              </div>
+              {currentNote.mastered && (
+                <motion.div 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold"
+                >
+                  <CheckCircle className="w-3 h-3" />
+                  Mastered
+                </motion.div>
+              )}
+            </div>
+
+            <div className="flex-1 p-8 overflow-y-auto flex flex-col items-center justify-center text-center">
+              <AnimatePresence mode="wait">
+                {isRevealed ? (
+                  <motion.div
+                    key="content"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full"
+                  >
+                    <div className="prose prose-neutral max-w-none">
+                      <p className="text-xl text-neutral-700 leading-relaxed whitespace-pre-wrap font-medium">
+                        {currentNote.content}
+                      </p>
+                    </div>
+                    <div className="mt-10 flex flex-wrap justify-center gap-2">
+                      {currentNote.tags.map(t => (
+                        <span key={t} className="px-4 py-1.5 bg-neutral-100 text-neutral-500 rounded-full text-[10px] font-bold uppercase tracking-wider">#{t}</span>
+                      ))}
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.button
+                    key="reveal"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsRevealed(true)}
+                    className="flex flex-col items-center gap-6 group"
+                  >
+                    <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center group-hover:bg-blue-100 group-hover:shadow-xl group-hover:shadow-blue-200/50 transition-all duration-500">
+                      <Eye className="w-12 h-12 text-blue-600" />
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-neutral-900 font-bold uppercase tracking-[0.2em] text-sm block">Reveal Content</span>
+                      <span className="text-neutral-400 text-xs font-medium block">Press Space or Click to show</span>
+                    </div>
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="p-8 bg-neutral-50 border-t border-neutral-100 flex flex-col sm:flex-row gap-4">
+              <button
+                onClick={() => onToggleMastered(currentNote.id, !currentNote.mastered)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 px-8 py-5 rounded-3xl font-bold transition-all text-sm uppercase tracking-widest",
+                  currentNote.mastered 
+                    ? "bg-green-600 text-white shadow-xl shadow-green-500/20" 
+                    : "bg-white border-2 border-neutral-200 text-neutral-600 hover:border-green-500 hover:text-green-600"
+                )}
+              >
+                <CheckCircle className="w-5 h-5" />
+                {currentNote.mastered ? 'Mastered!' : 'Mark as Mastered'}
+              </button>
+              <div className="flex gap-4 flex-1">
+                <button
+                  disabled={currentIndex === 0}
+                  onClick={prevNote}
+                  className="flex-1 px-8 py-5 bg-white border-2 border-neutral-200 rounded-3xl font-bold text-neutral-600 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm uppercase tracking-widest"
+                >
+                  Prev
+                </button>
+                <button
+                  disabled={currentIndex === notes.length - 1}
+                  onClick={nextNote}
+                  className="flex-1 px-8 py-5 bg-neutral-900 text-white rounded-3xl font-bold hover:bg-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xl text-sm uppercase tracking-widest"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Footer / Shortcuts */}
+      <div className="p-8 text-center text-neutral-500 text-[10px] font-bold uppercase tracking-[0.3em] relative z-10">
+        Arrows to navigate • Space to reveal • M to master
+      </div>
     </div>
   );
 };
@@ -444,7 +657,10 @@ const NoteCard = ({
         <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         <div className="flex justify-between items-start mb-4">
           <div className="space-y-1">
-            <span className="font-serif italic text-[11px] uppercase opacity-50 tracking-widest">{note.category}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-serif italic text-[11px] uppercase opacity-50 tracking-widest">{note.category}</span>
+              {note.mastered && <CheckCircle className="w-3 h-3 text-green-500" />}
+            </div>
             <h3 className="text-xl sm:text-2xl font-mono tracking-tight leading-none uppercase">{note.title}</h3>
           </div>
           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity no-print">
@@ -485,7 +701,10 @@ const NoteCard = ({
           <button onClick={onDelete} className="p-2 bg-red-500/20 text-red-400 rounded-full"><Trash2 className="w-4 h-4" /></button>
         </div>
         <div className="mb-6">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-orange-500 font-semibold mb-2 block">{note.category}</span>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-orange-500 font-semibold block">{note.category}</span>
+            {note.mastered && <CheckCircle className="w-3 h-3 text-green-500" />}
+          </div>
           <h3 className="text-2xl sm:text-4xl font-display uppercase leading-[0.85] tracking-tighter mb-4">{note.title}</h3>
           <div className="h-px bg-white/20 w-full mb-6" />
         </div>
@@ -832,13 +1051,32 @@ const AISummaryModal = ({
   );
 };
 
-const AIChat = ({ notes }: { notes: Note[] }) => {
+const AIChat = ({ notes, onAddNote }: { notes: Note[], onAddNote: (data: Partial<Note>) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [queryText, setQueryText] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'ai', text: string, files?: { name: string, type: string }[] }[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<{ name: string, type: string, data: string }[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const q = query(
+      collection(db, 'chat_messages'),
+      where('userId', '==', auth.currentUser.uid),
+      orderBy('createdAt', 'asc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => doc.data() as any);
+      setMessages(msgs);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -862,26 +1100,94 @@ const AIChat = ({ notes }: { notes: Note[] }) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSend = async () => {
-    if (!query.trim() && selectedFiles.length === 0) return;
+  const clearHistory = async () => {
+    if (!auth.currentUser) return;
+    if (!confirm('Are you sure you want to clear your chat history?')) return;
     
-    const userMsg = query;
+    try {
+      const q = query(collection(db, 'chat_messages'), where('userId', '==', auth.currentUser.uid));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    } catch (err) {
+      console.error('Error clearing history:', err);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!queryText.trim() && selectedFiles.length === 0) return;
+    if (!auth.currentUser) return;
+    
+    const userMsg = queryText;
     const currentFiles = [...selectedFiles];
-    setQuery('');
+    setQueryText('');
     setSelectedFiles([]);
-    setMessages(prev => [...prev, { 
-      role: 'user', 
-      text: userMsg, 
-      files: currentFiles.map(f => ({ name: f.name, type: f.type })) 
-    }]);
     setLoading(true);
 
     try {
-      const context = notes.map(n => `[${n.category}] ${n.title}: ${n.content}`).join('\n\n');
-      const res = await askAI(userMsg, context, currentFiles.map(f => ({ data: f.data, mimeType: f.type })));
-      setMessages(prev => [...prev, { role: 'ai', text: res || 'I couldn\'t find an answer.' }]);
+      // Save user message
+      await addDoc(collection(db, 'chat_messages'), {
+        userId: auth.currentUser.uid,
+        role: 'user',
+        text: userMsg,
+        files: currentFiles.map(f => ({ name: f.name, type: f.type })),
+        createdAt: new Date().toISOString()
+      });
+
+      const context = notes.map(n => `[ID: ${n.id}] [${n.category}] ${n.title}: ${n.content}`).join('\n\n');
+      const response = await askAI(userMsg, context, currentFiles.map(f => ({ data: f.data, mimeType: f.type })));
+      
+      const functionCalls = response.functionCalls;
+      if (functionCalls && functionCalls.length > 0) {
+        for (const call of functionCalls) {
+          let aiMsg = '';
+          if (call.name === 'addNote') {
+            const args = call.args as any;
+            onAddNote({
+              title: args.title,
+              content: args.content,
+              category: args.category,
+              tags: args.tags || []
+            });
+            aiMsg = `I've added a new note for you: **${args.title}**.`;
+          } else if (call.name === 'updateNote') {
+            const args = call.args as any;
+            onAddNote({
+              id: args.id,
+              title: args.title,
+              content: args.content,
+              category: args.category,
+              tags: args.tags,
+              mastered: args.mastered
+            });
+            aiMsg = `I've updated the note: **${args.title || 'Note'}**.`;
+          }
+          
+          if (aiMsg) {
+            await addDoc(collection(db, 'chat_messages'), {
+              userId: auth.currentUser.uid,
+              role: 'ai',
+              text: aiMsg,
+              createdAt: new Date().toISOString()
+            });
+          }
+        }
+      } else {
+        await addDoc(collection(db, 'chat_messages'), {
+          userId: auth.currentUser.uid,
+          role: 'ai',
+          text: response.text || 'I couldn\'t find an answer.',
+          createdAt: new Date().toISOString()
+        });
+      }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', text: 'Sorry, I encountered an error.' }]);
+      await addDoc(collection(db, 'chat_messages'), {
+        userId: auth.currentUser.uid,
+        role: 'ai',
+        text: 'Sorry, I encountered an error.',
+        createdAt: new Date().toISOString()
+      });
     } finally {
       setLoading(false);
     }
@@ -909,7 +1215,16 @@ const AIChat = ({ notes }: { notes: Note[] }) => {
                 <Sparkles className="w-5 h-5" />
                 <span className="font-bold">Revision Assistant</span>
               </div>
-              <button onClick={() => setIsOpen(false)} className="hover:opacity-70"><Plus className="rotate-45 w-6 h-6" /></button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={clearHistory}
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+                  title="Clear History"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => setIsOpen(false)} className="hover:opacity-70"><Plus className="rotate-45 w-6 h-6" /></button>
+              </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50">
@@ -948,6 +1263,7 @@ const AIChat = ({ notes }: { notes: Note[] }) => {
                   </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             <div className="p-4 border-t border-neutral-100 bg-white">
@@ -982,14 +1298,15 @@ const AIChat = ({ notes }: { notes: Note[] }) => {
                 </button>
                 <input 
                   type="text" 
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  value={queryText}
+                  onChange={(e) => setQueryText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Type your question..."
                   className="flex-1 px-4 py-2 rounded-full bg-neutral-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
                 <button 
                   onClick={handleSend}
+                  disabled={loading || (!queryText.trim() && selectedFiles.length === 0)}
                   className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors shrink-0"
                 >
                   <ChevronRight className="w-5 h-5" />
@@ -1013,6 +1330,7 @@ export default function App() {
   const [editingNote, setEditingNote] = useState<Partial<Note> | null>(null);
   const [summarizingNote, setSummarizingNote] = useState<Note | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isStudyMode, setIsStudyMode] = useState(false);
 
   // Connection Test
   useEffect(() => {
@@ -1078,19 +1396,30 @@ export default function App() {
   const saveNote = async (data: Partial<Note>) => {
     if (!user) return;
     
+    const noteId = data.id || editingNote?.id;
+    
+    // Clean up undefined values as Firestore doesn't support them
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    ) as Partial<Note>;
+
     try {
-      if (editingNote?.id) {
-        await updateDoc(doc(db, 'notes', editingNote.id), data);
+      if (noteId) {
+        // For updates, remove the id from the data payload
+        const { id, ...updateData } = cleanData;
+        await updateDoc(doc(db, 'notes', noteId), updateData);
       } else {
+        // For new notes, ensure tags is at least an empty array
         await addDoc(collection(db, 'notes'), {
-          ...data,
+          tags: [],
+          ...cleanData,
           userId: user.uid,
           createdAt: new Date().toISOString()
         });
       }
       setEditingNote(null);
     } catch (err) {
-      handleFirestoreError(err, editingNote?.id ? OperationType.UPDATE : OperationType.CREATE, 'notes');
+      handleFirestoreError(err, noteId ? OperationType.UPDATE : OperationType.CREATE, 'notes');
     }
   };
 
@@ -1101,6 +1430,14 @@ export default function App() {
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `notes/${id}`);
       }
+    }
+  };
+
+  const toggleMastered = async (id: string, mastered: boolean) => {
+    try {
+      await updateDoc(doc(db, 'notes', id), { mastered });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `notes/${id}`);
     }
   };
 
@@ -1227,6 +1564,13 @@ export default function App() {
           <DesignSelector current={design} onSelect={setDesign} />
           <div className="flex gap-3">
             <button 
+              onClick={() => setIsStudyMode(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-neutral-900 text-white rounded-2xl text-sm font-semibold hover:bg-neutral-800 transition-all shadow-lg"
+            >
+              <Award className="w-4 h-4 text-yellow-500" />
+              Study Mode
+            </button>
+            <button 
               onClick={() => window.print()}
               className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 rounded-2xl text-sm font-semibold hover:bg-neutral-50 transition-all shadow-sm"
             >
@@ -1288,6 +1632,13 @@ export default function App() {
 
       {/* Modals */}
       <AnimatePresence>
+        {isStudyMode && (
+          <StudyMode 
+            notes={notes} 
+            onClose={() => setIsStudyMode(false)}
+            onToggleMastered={toggleMastered}
+          />
+        )}
         {editingNote && (
           <NoteEditor 
             note={editingNote} 
@@ -1305,7 +1656,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* AI Chat */}
-      <AIChat notes={notes} />
+      <AIChat notes={notes} onAddNote={saveNote} />
 
       {/* Print View (Hidden on screen) */}
       <div className="print-only printable-content">

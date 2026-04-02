@@ -7,6 +7,7 @@ export interface Note {
   createdAt: string;
   userId: string;
   relatedNoteIds?: string[];
+  mastered?: boolean;
 }
 
 export interface Summary {

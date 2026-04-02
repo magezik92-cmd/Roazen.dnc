@@ -11,7 +11,8 @@
         "tags": { "type": "array", "items": { "type": "string" }, "description": "A list of tags for the note." },
         "createdAt": { "type": "string", "format": "date-time", "description": "The time the note was created." },
         "userId": { "type": "string", "description": "The user who created the note." },
-        "relatedNoteIds": { "type": "array", "items": { "type": "string" }, "description": "A list of IDs for related notes." }
+        "relatedNoteIds": { "type": "array", "items": { "type": "string" }, "description": "A list of IDs for related notes." },
+        "mastered": { "type": "boolean", "description": "Whether the user has mastered this note." }
       },
       "required": ["title", "content", "category", "createdAt", "userId"]
     },
@@ -25,6 +26,29 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "The time the summary was generated." }
       },
       "required": ["noteId", "summaryText", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A message in the AI assistant chat history.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The user who sent or received the message." },
+        "role": { "type": "string", "enum": ["user", "ai"], "description": "The role of the message sender." },
+        "text": { "type": "string", "description": "The content of the message." },
+        "files": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          },
+          "description": "Metadata of files attached to the message." 
+        },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The time the message was sent." }
+      },
+      "required": ["userId", "role", "text", "createdAt"]
     }
   },
   "firestore": {
@@ -35,6 +59,10 @@
     "/notes/{noteId}/summaries/{summaryId}": {
       "schema": "Summary",
       "description": "Summaries associated with a specific note."
+    },
+    "/chat_messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Chat history for the AI assistant."
     }
   }
 }
