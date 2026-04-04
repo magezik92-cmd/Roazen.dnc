@@ -51,7 +51,9 @@ import {
   Eye,
   EyeOff,
   Award,
-  Share2
+  Share2,
+  Filter,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
@@ -157,6 +159,293 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 // --- Components ---
+
+const FilterBar = ({ 
+  notes, 
+  selectedCategory, 
+  setSelectedCategory, 
+  selectedTags, 
+  setSelectedTags 
+}: { 
+  notes: Note[], 
+  selectedCategory: string | null, 
+  setSelectedCategory: (c: string | null) => void,
+  selectedTags: string[],
+  setSelectedTags: (tags: string[]) => void
+}) => {
+  const categories = useMemo(() => Array.from(new Set(notes.map(n => n.category))), [notes]);
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    notes.forEach(n => n.tags.forEach(t => tagSet.add(t)));
+    return Array.from(tagSet);
+  }, [notes]);
+
+  const toggleTag = (tag: string) => {
+    const newTags = selectedTags.includes(tag) 
+      ? selectedTags.filter(t => t !== tag) 
+      : [...selectedTags, tag];
+    setSelectedTags(newTags);
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm mb-8 space-y-6 no-print">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-neutral-400" />
+          <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-widest">Advanced Filters</h3>
+        </div>
+        {(selectedCategory || selectedTags.length > 0) && (
+          <button 
+            onClick={() => { setSelectedCategory(null); setSelectedTags([]); }}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+          >
+            Clear All Filters
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-3">Filter by Category</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+                !selectedCategory 
+                  ? "bg-neutral-900 text-white border-neutral-900 shadow-lg" 
+                  : "bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400"
+              )}
+            >
+              All Categories
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+                  selectedCategory === cat 
+                    ? "bg-blue-600 text-white border-blue-600 shadow-lg" 
+                    : "bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400"
+                )}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-3">Filter by Tags</label>
+          <div className="flex flex-wrap gap-2">
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-2",
+                  selectedTags.includes(tag)
+                    ? "bg-blue-50 text-blue-600 border-blue-200 shadow-sm" 
+                    : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-400"
+                )}
+              >
+                {selectedTags.includes(tag) && <Check className="w-3 h-3" />}
+                #{tag}
+              </button>
+            ))}
+            {allTags.length === 0 && (
+              <p className="text-xs text-neutral-400 italic">No tags available yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const NoteReader = ({ 
+  notes, 
+  initialNote, 
+  onClose,
+  onEdit,
+  onDelete,
+  onSummary
+}: { 
+  notes: Note[], 
+  initialNote: Note, 
+  onClose: () => void,
+  onEdit: (note: Note) => void,
+  onDelete: (id: string) => void,
+  onSummary: (note: Note) => void
+}) => {
+  const [currentIndex, setCurrentIndex] = useState(notes.findIndex(n => n.id === initialNote.id));
+  const currentNote = notes[currentIndex];
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') nextNote();
+      if (e.key === 'ArrowLeft') prevNote();
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex]);
+
+  const nextNote = () => {
+    if (currentIndex < notes.length - 1) setCurrentIndex(prev => prev + 1);
+  };
+
+  const prevNote = () => {
+    if (currentIndex > 0) setCurrentIndex(prev => prev - 1);
+  };
+
+  if (!currentNote) return null;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-white z-[70] flex flex-col overflow-hidden"
+    >
+      {/* Header */}
+      <div className="h-20 border-b border-neutral-100 flex items-center justify-between px-8 shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
+          >
+            <ChevronDown className="w-6 h-6 rotate-90" />
+          </button>
+          <div>
+            <h2 className="text-lg font-bold text-neutral-900">{currentNote.title}</h2>
+            <p className="text-[10px] text-neutral-400 uppercase font-bold tracking-widest">{currentNote.category}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => onSummary(currentNote)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-sm font-semibold transition-all"
+          >
+            <Sparkles className="w-4 h-4" />
+            AI Summary
+          </button>
+          <button 
+            onClick={() => onEdit(currentNote)}
+            className="flex items-center gap-2 px-4 py-2 hover:bg-neutral-100 rounded-xl text-sm font-semibold transition-all"
+          >
+            <Edit3 className="w-4 h-4" />
+            Edit
+          </button>
+          <button 
+            onClick={() => {
+              onDelete(currentNote.id);
+              onClose();
+            }}
+            className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 text-red-500 rounded-xl text-sm font-semibold transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+          <div className="w-px h-6 bg-neutral-200 mx-2" />
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 bg-neutral-900 text-white rounded-full flex items-center justify-center hover:bg-neutral-800 transition-all shadow-lg"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto bg-neutral-50/50">
+        <div className="max-w-4xl mx-auto px-8 py-16">
+          <motion.div
+            key={currentNote.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-12 sm:p-20 rounded-[3rem] shadow-2xl shadow-neutral-200/50 border border-neutral-100"
+          >
+            <div className="flex flex-wrap gap-2 mb-8">
+              {currentNote.tags.map(t => (
+                <span key={t} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold uppercase tracking-wider">
+                  #{t}
+                </span>
+              ))}
+            </div>
+            
+            <h1 className="text-4xl sm:text-6xl font-black text-neutral-900 mb-12 leading-[1.1] tracking-tight">
+              {currentNote.title}
+            </h1>
+
+            <div className="prose prose-neutral prose-lg max-w-none">
+              <p className="text-neutral-700 leading-relaxed whitespace-pre-wrap text-xl">
+                {currentNote.content}
+              </p>
+            </div>
+
+            {currentNote.relatedNoteIds && currentNote.relatedNoteIds.length > 0 && (
+              <div className="mt-20 pt-12 border-t border-neutral-100">
+                <h3 className="text-sm font-bold text-neutral-400 uppercase tracking-[0.2em] mb-6">Related Concepts</h3>
+                <div className="flex flex-wrap gap-3">
+                  {currentNote.relatedNoteIds.map(rid => {
+                    const related = notes.find(n => n.id === rid);
+                    if (!related) return null;
+                    return (
+                      <button
+                        key={rid}
+                        onClick={() => setCurrentIndex(notes.findIndex(n => n.id === rid))}
+                        className="px-6 py-3 bg-neutral-100 hover:bg-blue-600 hover:text-white rounded-2xl text-sm font-bold transition-all"
+                      >
+                        {related.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Navigation Footer */}
+      <div className="h-24 border-t border-neutral-100 flex items-center justify-center px-8 shrink-0 bg-white">
+        <div className="flex items-center gap-8">
+          <button 
+            disabled={currentIndex === 0}
+            onClick={prevNote}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-neutral-500 hover:bg-neutral-100 disabled:opacity-20 transition-all"
+          >
+            <ChevronDown className="w-5 h-5 rotate-90" />
+            Previous Note
+          </button>
+          
+          <div className="flex items-center gap-2">
+            {notes.map((_, i) => (
+              <div 
+                key={i}
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-500",
+                  i === currentIndex ? "w-8 bg-blue-600" : "w-1.5 bg-neutral-200"
+                )}
+              />
+            ))}
+          </div>
+
+          <button 
+            disabled={currentIndex === notes.length - 1}
+            onClick={nextNote}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-neutral-900 hover:bg-neutral-100 disabled:opacity-20 transition-all"
+          >
+            Next Note
+            <ChevronDown className="w-5 h-5 -rotate-90" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 const TagInput = ({ 
   tags, 
@@ -614,6 +903,7 @@ const NoteCard = ({
   onEdit, 
   onDelete,
   onSummary,
+  onRead,
   onNavigateToNote
 }: { 
   note: Note, 
@@ -622,6 +912,7 @@ const NoteCard = ({
   onEdit: () => void, 
   onDelete: () => void,
   onSummary: () => void,
+  onRead: () => void,
   onNavigateToNote: (id: string) => void
 }) => {
   const relatedNotes = useMemo(() => {
@@ -652,6 +943,7 @@ const NoteCard = ({
         layout
         whileHover={{ y: -4 }}
         id={`note-${note.id}`}
+        onClick={onRead}
         className="design-technical border-b border-neutral-900 p-6 hover:bg-neutral-900 hover:text-neutral-50 transition-all duration-300 group cursor-pointer relative overflow-hidden"
       >
         <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
@@ -694,11 +986,12 @@ const NoteCard = ({
         layout
         whileHover={{ scale: 1.01 }}
         id={`note-${note.id}`}
-        className="design-editorial bg-neutral-950 text-white p-8 rounded-3xl overflow-hidden relative group transition-shadow hover:shadow-2xl hover:shadow-orange-500/10"
+        onClick={onRead}
+        className="design-editorial bg-neutral-950 text-white p-8 rounded-3xl overflow-hidden relative group transition-shadow hover:shadow-2xl hover:shadow-orange-500/10 cursor-pointer"
       >
         <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity no-print flex gap-2">
-          <button onClick={onEdit} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><Edit3 className="w-4 h-4" /></button>
-          <button onClick={onDelete} className="p-2 bg-red-500/20 text-red-400 rounded-full"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><Edit3 className="w-4 h-4" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 bg-red-500/20 text-red-400 rounded-full"><Trash2 className="w-4 h-4" /></button>
         </div>
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
@@ -720,7 +1013,7 @@ const NoteCard = ({
             ))}
           </div>
           <button 
-            onClick={onSummary}
+            onClick={(e) => { e.stopPropagation(); onSummary(); }}
             className="w-12 h-12 rounded-full border border-white/30 flex items-center justify-center hover:bg-orange-500 hover:border-orange-500 transition-all no-print"
           >
             <Sparkles className="w-5 h-5" />
@@ -737,6 +1030,7 @@ const NoteCard = ({
         layout
         whileHover={{ x: 4, y: 4 }}
         id={`note-${note.id}`}
+        onClick={onRead}
         className="design-brutalist bg-white border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all group cursor-pointer"
       >
         <div className="flex justify-between items-start mb-4">
@@ -744,8 +1038,8 @@ const NoteCard = ({
             {note.category}
           </div>
           <div className="flex gap-1 no-print">
-            <button onClick={onEdit} className="p-1 border-2 border-black hover:bg-yellow-400"><Edit3 className="w-4 h-4" /></button>
-            <button onClick={onDelete} className="p-1 border-2 border-black hover:bg-red-500"><Trash2 className="w-4 h-4" /></button>
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 border-2 border-black hover:bg-yellow-400"><Edit3 className="w-4 h-4" /></button>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 border-2 border-black hover:bg-red-500"><Trash2 className="w-4 h-4" /></button>
           </div>
         </div>
         <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-4 leading-none">
@@ -762,7 +1056,7 @@ const NoteCard = ({
           ))}
         </div>
         <button 
-          onClick={onSummary}
+          onClick={(e) => { e.stopPropagation(); onSummary(); }}
           className="w-full border-4 border-black py-2 font-black uppercase hover:bg-black hover:text-white transition-colors no-print flex items-center justify-center gap-2 mb-4"
         >
           <Sparkles className="w-4 h-4" /> AI Summary
@@ -778,13 +1072,14 @@ const NoteCard = ({
       layout
       whileHover={{ y: -5, boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)" }}
       id={`note-${note.id}`}
+      onClick={onRead}
       className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm hover:border-blue-200 transition-all duration-300 group cursor-pointer"
     >
       <div className="flex justify-between items-start mb-3">
         <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2 py-1 rounded-md">{note.category}</span>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity no-print">
-          <button onClick={onEdit} className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-500"><Edit3 className="w-4 h-4" /></button>
-          <button onClick={onDelete} className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-500"><Edit3 className="w-4 h-4" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg"><Trash2 className="w-4 h-4" /></button>
         </div>
       </div>
       <h3 className="text-lg font-semibold text-neutral-900 mb-2">{note.title}</h3>
@@ -796,7 +1091,7 @@ const NoteCard = ({
           ))}
         </div>
         <button 
-          onClick={onSummary}
+          onClick={(e) => { e.stopPropagation(); onSummary(); }}
           className="p-2 text-neutral-400 hover:text-blue-600 transition-colors no-print"
           title="AI Summary"
         >
@@ -941,7 +1236,7 @@ const KnowledgeGraph = ({ notes, onNavigateToNote }: { notes: Note[], onNavigate
   );
 };
 
-const MappingView = ({ notes }: { notes: Note[] }) => {
+const MappingView = ({ notes, onRead }: { notes: Note[], onRead: (note: Note) => void }) => {
   const categories = Array.from(new Set(notes.map(n => n.category)));
 
   return (
@@ -967,6 +1262,7 @@ const MappingView = ({ notes }: { notes: Note[] }) => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: (i * 0.1) + (ni * 0.05) }}
+                  onClick={() => onRead(note)}
                   className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 w-full sm:w-48 text-center hover:shadow-lg transition-all cursor-pointer group"
                 >
                   <h4 className="font-bold text-sm mb-1 group-hover:text-blue-600 transition-colors">{note.title}</h4>
@@ -1102,7 +1398,6 @@ const AIChat = ({ notes, onAddNote }: { notes: Note[], onAddNote: (data: Partial
 
   const clearHistory = async () => {
     if (!auth.currentUser) return;
-    if (!confirm('Are you sure you want to clear your chat history?')) return;
     
     try {
       const q = query(collection(db, 'chat_messages'), where('userId', '==', auth.currentUser.uid));
@@ -1330,7 +1625,11 @@ export default function App() {
   const [editingNote, setEditingNote] = useState<Partial<Note> | null>(null);
   const [summarizingNote, setSummarizingNote] = useState<Note | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
   const [isStudyMode, setIsStudyMode] = useState(false);
+  const [readingNote, setReadingNote] = useState<Note | null>(null);
 
   // Connection Test
   useEffect(() => {
@@ -1424,12 +1723,10 @@ export default function App() {
   };
 
   const deleteNote = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this note?')) {
-      try {
-        await deleteDoc(doc(db, 'notes', id));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `notes/${id}`);
-      }
+    try {
+      await deleteDoc(doc(db, 'notes', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `notes/${id}`);
     }
   };
 
@@ -1442,12 +1739,18 @@ export default function App() {
   };
 
   const filteredNotes = useMemo(() => {
-    return notes.filter(n => 
-      n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [notes, searchTerm]);
+    return notes.filter(n => {
+      const matchesSearch = 
+        n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        n.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        n.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      const matchesCategory = !selectedCategory || n.category === selectedCategory;
+      const matchesTags = selectedTags.length === 0 || selectedTags.every(t => n.tags.includes(t));
+
+      return matchesSearch && matchesCategory && matchesTags;
+    });
+  }, [notes, searchTerm, selectedCategory, selectedTags]);
 
   const handleNavigateToNote = (id: string) => {
     setDesign('minimal'); // Switch to minimal to see the note
@@ -1511,8 +1814,8 @@ export default function App() {
             <h1 className="text-xl font-bold tracking-tight hidden sm:block">School of Revision</h1>
           </div>
 
-          <div className="flex-1 max-w-md mx-4 sm:mx-8">
-            <div className="relative">
+          <div className="flex-1 max-w-md mx-4 sm:mx-8 flex items-center gap-2">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               <input 
                 type="text" 
@@ -1522,6 +1825,18 @@ export default function App() {
                 className="w-full pl-10 pr-4 py-2 bg-neutral-100 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
               />
             </div>
+            <button 
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(
+                "p-2 rounded-full transition-all",
+                showFilters || selectedCategory || selectedTags.length > 0
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-100" 
+                  : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+              )}
+              title="Advanced Filters"
+            >
+              <Filter className="w-4 h-4" />
+            </button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -1587,12 +1902,34 @@ export default function App() {
           </div>
         </div>
 
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <FilterBar 
+                notes={notes}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                selectedTags={selectedTags}
+                setSelectedTags={setSelectedTags}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Content */}
         <AnimatePresence mode="wait">
           {design === 'mapping' ? (
-            <MappingView notes={filteredNotes} />
+            <MappingView notes={filteredNotes} onRead={setReadingNote} />
           ) : design === 'graph' ? (
-            <KnowledgeGraph notes={filteredNotes} onNavigateToNote={handleNavigateToNote} />
+            <KnowledgeGraph notes={filteredNotes} onNavigateToNote={(id) => {
+              const note = notes.find(n => n.id === id);
+              if (note) setReadingNote(note);
+            }} />
           ) : (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -1615,7 +1952,11 @@ export default function App() {
                   onEdit={() => setEditingNote(note)}
                   onDelete={() => deleteNote(note.id)}
                   onSummary={() => setSummarizingNote(note)}
-                  onNavigateToNote={handleNavigateToNote}
+                  onRead={() => setReadingNote(note)}
+                  onNavigateToNote={(id) => {
+                    const n = notes.find(note => note.id === id);
+                    if (n) setReadingNote(n);
+                  }}
                 />
               ))}
             </motion.div>
@@ -1651,6 +1992,16 @@ export default function App() {
           <AISummaryModal 
             note={summarizingNote} 
             onClose={() => setSummarizingNote(null)} 
+          />
+        )}
+        {readingNote && (
+          <NoteReader 
+            notes={filteredNotes}
+            initialNote={readingNote}
+            onClose={() => setReadingNote(null)}
+            onEdit={(note) => { setReadingNote(null); setEditingNote(note); }}
+            onDelete={deleteNote}
+            onSummary={(note) => { setReadingNote(null); setSummarizingNote(note); }}
           />
         )}
       </AnimatePresence>

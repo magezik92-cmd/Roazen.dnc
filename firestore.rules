@@ -52,7 +52,10 @@ service cloud.firestore {
     }
 
     function isValidNote(data) {
-      return data.keys().hasAll(['title', 'content', 'category', 'createdAt', 'userId']) &&
+      let requiredFields = ['title', 'content', 'category', 'createdAt', 'userId'];
+      let optionalFields = ['tags', 'relatedNoteIds', 'mastered'];
+      return data.keys().hasOnly(requiredFields.concat(optionalFields)) &&
+             data.keys().hasAll(requiredFields) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
              data.content is string && data.content.size() > 0 && data.content.size() < 100000 &&
              data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
@@ -63,13 +66,17 @@ service cloud.firestore {
     }
 
     function isValidSummary(data) {
-      return data.keys().hasAll(['noteId', 'summaryText', 'createdAt']) &&
+      return data.keys().hasOnly(['noteId', 'summaryText', 'createdAt']) &&
+             data.keys().hasAll(['noteId', 'summaryText', 'createdAt']) &&
              data.noteId is string &&
              data.summaryText is string && data.summaryText.size() > 0 && data.summaryText.size() < 10000;
     }
 
     function isValidChatMessage(data) {
-      return data.keys().hasAll(['userId', 'role', 'text', 'createdAt']) &&
+      let requiredFields = ['userId', 'role', 'text', 'createdAt'];
+      let optionalFields = ['files'];
+      return data.keys().hasOnly(requiredFields.concat(optionalFields)) &&
+             data.keys().hasAll(requiredFields) &&
              data.userId == request.auth.uid &&
              data.role in ['user', 'ai'] &&
              data.text is string && data.text.size() > 0 && data.text.size() < 10000 &&
@@ -78,7 +85,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create, update: if isOwner(userId) && request.resource.data.role == 'student';
+      allow create: if isOwner(userId) && request.resource.data.role == 'student' && request.resource.data.keys().hasOnly(['role', 'displayName', 'photoURL', 'email']);
+      allow update: if isOwner(userId) && request.resource.data.role == resource.data.role && request.resource.data.keys().hasOnly(['role', 'displayName', 'photoURL', 'email']);
     }
 
     match /chat_messages/{messageId} {
@@ -90,13 +98,20 @@ service cloud.firestore {
     match /notes/{noteId} {
       allow read: if isDocOwner() || isAdmin();
       allow create: if isAuthenticated() && isValidNote(request.resource.data);
-      allow update: if (isDocOwner() || isAdmin()) && isValidNote(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow update: if (isDocOwner() || isAdmin()) && 
+                    isValidNote(request.resource.data) && 
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isDocOwner() || isAdmin();
 
       match /summaries/{summaryId} {
         allow read: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid;
         allow create: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid && isValidSummary(request.resource.data);
-        allow update: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid && isValidSummary(request.resource.data);
+        allow update: if isAuthenticated() && 
+                      get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid && 
+                      isValidSummary(request.resource.data) &&
+                      request.resource.data.createdAt == resource.data.createdAt &&
+                      request.resource.data.noteId == resource.data.noteId;
         allow delete: if isAuthenticated() && get(/databases/$(database)/documents/notes/$(noteId)).data.userId == request.auth.uid;
       }
     }
